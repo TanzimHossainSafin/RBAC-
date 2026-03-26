@@ -264,6 +264,12 @@ button {
   color: #b53d20;
 }
 
+.small-button.reactivate {
+  color: #165f37;
+  background: rgba(173, 244, 198, 0.4);
+  border-color: rgba(100, 210, 140, 0.4);
+}
+
 .login-footer {
   margin-top: 30px;
   display: inline-flex;

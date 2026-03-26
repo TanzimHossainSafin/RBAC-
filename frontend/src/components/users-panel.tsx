@@ -83,10 +83,11 @@ export function UsersPanel() {
     await loadData();
   }
 
-  async function handleStatus(userId: string, action: "suspend" | "ban") {
+  async function handleStatus(userId: string, action: "suspend" | "ban" | "reactivate") {
     setFeedback(null);
     await apiFetch(`/users/${userId}/${action}`, { method: "POST" });
-    setFeedback(`User ${action}ed`);
+    const messages = { suspend: "User suspended", ban: "User banned", reactivate: "User reactivated" };
+    setFeedback(messages[action]);
     await loadData();
   }
 
@@ -138,12 +139,12 @@ export function UsersPanel() {
                 <em>{user.status}</em>
               </div>
               <div className="row-actions">
-                {currentUser?.permissions.includes("users.suspend") ? (
+                {currentUser?.permissions.includes("users.suspend") && user.status === "active" ? (
                   <button className="small-button" onClick={() => void handleStatus(user.id, "suspend")}>
                     Suspend
                   </button>
                 ) : null}
-                {currentUser?.permissions.includes("users.edit") ? (
+                {currentUser?.permissions.includes("users.edit") && user.status === "active" ? (
                   <button
                     className="small-button"
                     onClick={() => {
@@ -157,9 +158,14 @@ export function UsersPanel() {
                     Edit
                   </button>
                 ) : null}
-                {currentUser?.permissions.includes("users.ban") ? (
+                {currentUser?.permissions.includes("users.ban") && user.status !== "banned" ? (
                   <button className="small-button alt" onClick={() => void handleStatus(user.id, "ban")}>
                     Ban
+                  </button>
+                ) : null}
+                {currentUser?.permissions.includes("users.suspend") && user.status !== "active" ? (
+                  <button className="small-button reactivate" onClick={() => void handleStatus(user.id, "reactivate")}>
+                    Reactivate
                   </button>
                 ) : null}
                 {currentUser?.permissions.includes("permissions.assign") ? (

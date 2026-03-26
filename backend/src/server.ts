@@ -468,6 +468,25 @@ app.post("/users/:id/ban", authGuard, permissionGuard("users.ban"), async (req, 
   res.json({ user: sanitizeUser(updated) });
 });
 
+app.post("/users/:id/reactivate", authGuard, permissionGuard("users.suspend"), async (req, res) => {
+  const authedReq = req as AuthedRequest;
+  const target = await getUserById(String(req.params.id));
+  if (!target || !canManage(authedReq.user, target)) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  if (target.status === "active") {
+    return res.status(400).json({ message: "User is already active" });
+  }
+
+  const updated = await updateUserStatus(target.id, "active");
+  if (!updated) {
+    return res.status(404).json({ message: "User not found" });
+  }
+  await appendAudit(authedReq.user, "users.reactivate", target.id, `Reactivated ${target.email}`);
+  res.json({ user: sanitizeUser(updated) });
+});
+
 app.get("/users/:id/permissions", authGuard, permissionGuard("permissions.view"), async (req, res) => {
   const authedReq = req as AuthedRequest;
   const target = await getUserById(String(req.params.id));
