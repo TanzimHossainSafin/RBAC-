@@ -8,7 +8,7 @@ backend/dist/
 *.log
 frontend/.env.local
 backend/.env
-package-lock.json
+/package-lock.json
 img/
 task/
 frontend/AGENTS.md
