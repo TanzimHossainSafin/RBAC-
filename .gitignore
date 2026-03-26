@@ -1,0 +1,15 @@
+.DS_Store
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+frontend/.next/
+frontend/out/
+backend/dist/
+*.log
+frontend/.env.local
+backend/.env
+package-lock.json
+img/
+task/
+frontend/AGENTS.md
+frontend/CLAUDE.md
