@@ -4,6 +4,25 @@ import { useState } from "react";
 import { useAuth } from "./auth-provider";
 import { API_URL } from "@/lib/config";
 
+function EyeIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
+
 const DEMO_USERS = [
   { label: "Admin", email: "admin@obliq.app", password: "Admin123!" },
   { label: "Manager", email: "manager@obliq.app", password: "Manager123!" },
@@ -20,9 +39,22 @@ export function LoginForm() {
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [remember, setRemember] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  async function safeJson<T>(response: Response): Promise<T> {
+    const text = await response.text();
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new Error(
+        response.ok ? "Unexpected server response" : `Server error (${response.status})`,
+      );
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,7 +70,7 @@ export function LoginForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ name, email, password }),
         });
-        const data = (await response.json()) as { message?: string };
+        const data = await safeJson<{ message?: string }>(response);
         if (!response.ok) {
           throw new Error(data.message ?? "Sign up failed");
         }
@@ -50,7 +82,7 @@ export function LoginForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email }),
         });
-        const data = (await response.json()) as { message?: string; resetToken?: string };
+        const data = await safeJson<{ message?: string; resetToken?: string }>(response);
         if (!response.ok) {
           throw new Error(data.message ?? "Request failed");
         }
@@ -67,7 +99,7 @@ export function LoginForm() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, token: resetToken, newPassword }),
         });
-        const data = (await response.json()) as { message?: string };
+        const data = await safeJson<{ message?: string }>(response);
         if (!response.ok) {
           throw new Error(data.message ?? "Reset failed");
         }
@@ -78,7 +110,11 @@ export function LoginForm() {
         setMode("login");
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      if (err instanceof TypeError && err.message.toLowerCase().includes("fetch")) {
+        setError("Cannot reach the server. Please try again.");
+      } else {
+        setError(err instanceof Error ? err.message : "Something went wrong");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -130,14 +166,19 @@ export function LoginForm() {
                 <span>Password</span>
                 <div className="password-field">
                   <input
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="Enter your password"
                   />
-                  <span className="password-eye" aria-hidden="true">
-                    o
-                  </span>
+                  <button
+                    type="button"
+                    className="password-eye"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                  </button>
                 </div>
               </label>
             ) : null}
@@ -150,12 +191,22 @@ export function LoginForm() {
                 </label>
                 <label>
                   <span>New password</span>
-                  <input
-                    type="password"
-                    value={newPassword}
-                    onChange={(event) => setNewPassword(event.target.value)}
-                    placeholder="Enter a new password"
-                  />
+                  <div className="password-field">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      placeholder="Enter a new password"
+                    />
+                    <button
+                      type="button"
+                      className="password-eye"
+                      onClick={() => setShowNewPassword((prev) => !prev)}
+                      aria-label={showNewPassword ? "Hide password" : "Show password"}
+                    >
+                      {showNewPassword ? <EyeOffIcon /> : <EyeIcon />}
+                    </button>
+                  </div>
                 </label>
               </>
             ) : null}
