@@ -28,6 +28,9 @@ export async function middleware(request: NextRequest) {
 
   try {
     const { payload } = await jwtVerify(token, secret);
+    if (payload.type !== "hint") {
+      return NextResponse.redirect(new URL("/", request.url));
+    }
     const permissions = ((payload.permissions as string[]) ?? []) as Permission[];
     if (!permissions.includes(requiredPermission)) {
       return NextResponse.redirect(new URL("/forbidden", request.url));

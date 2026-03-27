@@ -47,6 +47,7 @@ function mapSession(row: Record<string, unknown>): SessionRecord {
     id: String(row.id),
     userId: String(row.user_id),
     refreshToken: String(row.refresh_token),
+    rememberMe: Boolean(row.remember_me),
     expiresAt: new Date(String(row.expires_at)).toISOString(),
     revokedAt: row.revoked_at ? new Date(String(row.revoked_at)).toISOString() : null,
     createdAt: new Date(String(row.created_at)).toISOString(),
@@ -198,6 +199,7 @@ export async function initDatabase() {
       id uuid primary key,
       user_id uuid not null references users(id) on delete cascade,
       refresh_token text not null,
+      remember_me boolean not null default true,
       expires_at timestamptz not null,
       revoked_at timestamptz null,
       created_at timestamptz not null default now()
@@ -256,6 +258,8 @@ export async function initDatabase() {
     );
   `);
 
+  await pool.query("alter table sessions add column if not exists remember_me boolean not null default true");
+
   await seedDatabase();
 }
 
@@ -271,8 +275,8 @@ export async function getUserById(id: string) {
 
 export async function createSession(session: SessionRecord) {
   await pool.query(
-    "insert into sessions (id, user_id, refresh_token, expires_at, revoked_at, created_at) values ($1,$2,$3,$4,$5,$6)",
-    [session.id, session.userId, session.refreshToken, session.expiresAt, session.revokedAt, session.createdAt],
+    "insert into sessions (id, user_id, refresh_token, remember_me, expires_at, revoked_at, created_at) values ($1,$2,$3,$4,$5,$6,$7)",
+    [session.id, session.userId, session.refreshToken, session.rememberMe, session.expiresAt, session.revokedAt, session.createdAt],
   );
 }
 
@@ -336,10 +340,10 @@ export async function updateUserPassword(id: string, passwordHash: string) {
   await pool.query("update users set password_hash = $2, updated_at = now() where id = $1", [id, passwordHash]);
 }
 
-export async function updateUserBasics(id: string, values: { name: string; role: Role }) {
+export async function updateUserBasics(id: string, values: { name: string; role: Role; managerId: string | null }) {
   const result = await pool.query(
-    "update users set name = $2, role = $3, updated_at = now() where id = $1 returning *",
-    [id, values.name, values.role],
+    "update users set name = $2, role = $3, manager_id = $4, updated_at = now() where id = $1 returning *",
+    [id, values.name, values.role, values.managerId],
   );
   return result.rows[0] ? mapUser(result.rows[0]) : null;
 }
@@ -361,16 +365,49 @@ export async function insertAuditLog(log: AuditLogRecord) {
   );
 }
 
-export async function listAuditLogs() {
-  const result = await pool.query("select * from audit_logs order by created_at desc");
+async function listVisibleUserIds(actor: UserRecord) {
+  if (actor.role === "admin") {
+    const result = await pool.query("select id from users");
+    return result.rows.map((row) => String(row.id));
+  }
+
+  if (actor.role === "manager") {
+    const result = await pool.query(
+      "select id from users where id = $1 or manager_id = $1 or created_by = $1 order by created_at desc",
+      [actor.id],
+    );
+    return result.rows.map((row) => String(row.id));
+  }
+
+  return [actor.id];
+}
+
+export async function listAuditLogsForUser(actor: UserRecord) {
+  if (actor.role === "admin") {
+    const result = await pool.query("select * from audit_logs order by created_at desc");
+    return result.rows.map(mapAuditLog);
+  }
+
+  const visibleUserIds = await listVisibleUserIds(actor);
+  const result = await pool.query(
+    `
+      select *
+      from audit_logs
+      where actor_user_id = any($1::uuid[])
+        or (target_user_id is not null and target_user_id = any($1::uuid[]))
+      order by created_at desc
+    `,
+    [visibleUserIds],
+  );
   return result.rows.map(mapAuditLog);
 }
 
 export async function listLeadsForUser(user: UserRecord) {
+  const visibleUserIds = await listVisibleUserIds(user);
   const result =
-    user.role === "admin" || user.role === "manager"
+    user.role === "admin"
       ? await pool.query("select * from leads order by company asc")
-      : await pool.query("select * from leads where owner_user_id = $1 order by company asc", [user.id]);
+      : await pool.query("select * from leads where owner_user_id = any($1::uuid[]) order by company asc", [visibleUserIds]);
   return result.rows.map(
     (row): LeadRecord => ({
       id: String(row.id),
@@ -383,10 +420,11 @@ export async function listLeadsForUser(user: UserRecord) {
 }
 
 export async function listTasksForUser(user: UserRecord) {
+  const visibleUserIds = await listVisibleUserIds(user);
   const result =
-    user.role === "admin" || user.role === "manager"
+    user.role === "admin"
       ? await pool.query("select * from tasks order by due_date asc")
-      : await pool.query("select * from tasks where owner_user_id = $1 order by due_date asc", [user.id]);
+      : await pool.query("select * from tasks where owner_user_id = any($1::uuid[]) order by due_date asc", [visibleUserIds]);
   return result.rows.map(
     (row): TaskRecord => ({
       id: String(row.id),
@@ -416,10 +454,15 @@ export async function listReportsForUser(user: UserRecord) {
 }
 
 export async function listCustomerPortalForUser(user: UserRecord) {
+  const visibleUserIds = await listVisibleUserIds(user);
   const result =
     user.role === "customer"
       ? await pool.query("select * from customer_portal where customer_user_id = $1 order by updated_at desc", [user.id])
-      : await pool.query("select * from customer_portal order by updated_at desc");
+      : user.role === "admin"
+        ? await pool.query("select * from customer_portal order by updated_at desc")
+        : await pool.query("select * from customer_portal where customer_user_id = any($1::uuid[]) order by updated_at desc", [
+            visibleUserIds,
+          ]);
   return result.rows.map(
     (row): CustomerPortalRecord => ({
       id: String(row.id),
@@ -458,12 +501,33 @@ export async function markPasswordResetTokenUsed(id: string) {
   await pool.query("update password_reset_tokens set used_at = now() where id = $1", [id]);
 }
 
-export async function getCounts() {
+export async function getCountsForUser(user: UserRecord) {
+  if (user.role === "admin") {
+    const [users, leads, tasks, reports] = await Promise.all([
+      pool.query("select count(*)::int as count from users"),
+      pool.query("select count(*)::int as count from leads"),
+      pool.query("select count(*)::int as count from tasks"),
+      pool.query("select count(*)::int as count from reports"),
+    ]);
+    return {
+      users: users.rows[0].count as number,
+      leads: leads.rows[0].count as number,
+      tasks: tasks.rows[0].count as number,
+      reports: reports.rows[0].count as number,
+    };
+  }
+
+  const visibleUserIds = await listVisibleUserIds(user);
+  const reportsQuery =
+    user.role === "agent" || user.role === "customer"
+      ? pool.query("select count(*)::int as count from reports where visibility = 'team'")
+      : pool.query("select count(*)::int as count from reports");
+
   const [users, leads, tasks, reports] = await Promise.all([
-    pool.query("select count(*)::int as count from users"),
-    pool.query("select count(*)::int as count from leads"),
-    pool.query("select count(*)::int as count from tasks"),
-    pool.query("select count(*)::int as count from reports"),
+    pool.query("select count(*)::int as count from users where id = any($1::uuid[])", [visibleUserIds]),
+    pool.query("select count(*)::int as count from leads where owner_user_id = any($1::uuid[])", [visibleUserIds]),
+    pool.query("select count(*)::int as count from tasks where owner_user_id = any($1::uuid[])", [visibleUserIds]),
+    reportsQuery,
   ]);
   return {
     users: users.rows[0].count as number,

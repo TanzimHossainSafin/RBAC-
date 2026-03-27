@@ -1,5 +1,8 @@
+import type { Request } from "express";
+
 export type Role = "admin" | "manager" | "agent" | "customer";
 export type UserStatus = "active" | "suspended" | "banned";
+export type AuthTokenType = "access" | "hint" | "refresh";
 
 export type Permission =
   | "dashboard.view"
@@ -35,6 +38,7 @@ export interface SessionRecord {
   id: string;
   userId: string;
   refreshToken: string;
+  rememberMe: boolean;
   expiresAt: string;
   revokedAt: string | null;
   createdAt: string;
@@ -92,12 +96,22 @@ export interface CustomerPortalRecord {
   updatedAt: string;
 }
 
-export interface StoreData {
-  users: UserRecord[];
-  sessions: SessionRecord[];
-  auditLogs: AuditLogRecord[];
-  leads: LeadRecord[];
-  tasks: TaskRecord[];
-  reports: ReportRecord[];
-  customerPortal: CustomerPortalRecord[];
+export interface SidebarItem {
+  label: string;
+  href: string;
+  permission: Permission;
+}
+
+export interface StatsRecord {
+  users: number;
+  leads: number;
+  tasks: number;
+  reports: number;
+}
+
+export type SafeUser = Omit<UserRecord, "passwordHash">;
+
+export interface AuthenticatedRequest extends Request {
+  user: UserRecord;
+  sessionId: string;
 }

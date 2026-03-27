@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useAuth } from "./auth-provider";
 import { API_URL } from "@/lib/config";
+import { useAuth } from "./auth-provider";
 
 function EyeIcon() {
   return (
@@ -30,9 +30,123 @@ const DEMO_USERS = [
   { label: "Customer", email: "customer@obliq.app", password: "Customer123!" },
 ];
 
+const MODE_COPY = {
+  login: {
+    title: "Login",
+    subtitle: "Enter your details to continue",
+    action: "Log in",
+  },
+  signup: {
+    title: "Create Account",
+    subtitle: "Set up a customer access profile in the shared workspace",
+    action: "Sign up",
+  },
+  forgot: {
+    title: "Forgot Password",
+    subtitle: "Generate a secure reset token for an existing account",
+    action: "Generate token",
+  },
+  reset: {
+    title: "Reset Password",
+    subtitle: "Apply the reset token and issue a new password",
+    action: "Update password",
+  },
+} as const;
+
+type AuthMode = keyof typeof MODE_COPY;
+
+function PreviewScene() {
+  return (
+    <aside className="preview-panel">
+      <div className="preview-waves" />
+      <div className="preview-glow" />
+
+      <div className="preview-browser">
+        <div className="preview-browser-bar">
+          <div className="preview-browser-dots">
+            <span />
+            <span />
+            <span />
+          </div>
+          <span>Tasks workspace</span>
+        </div>
+
+        <div className="preview-browser-body">
+          <div className="preview-sidebar">
+            <div className="preview-sidebar-card">
+              <div className="workspace-avatar">W</div>
+              <div>
+                <strong>John&apos;s workspace</strong>
+                <span>#WID12446875</span>
+              </div>
+            </div>
+
+            <nav className="preview-nav">
+              <span>Dashboard</span>
+              <span>Leads</span>
+              <span>Opportunities</span>
+              <span className="active">Tasks</span>
+              <span>Assignments</span>
+              <span>Reports</span>
+              <span>Messages</span>
+              <span>Settings</span>
+            </nav>
+          </div>
+
+          <div className="preview-surface">
+            <div className="preview-toolbar">
+              <span>Search table</span>
+              <strong>List</strong>
+              <span>Kanban</span>
+              <span>Calendar</span>
+            </div>
+
+            <div className="preview-task-list">
+              <div className="preview-task-row">
+                <strong>Call about proposal</strong>
+                <em>Urgent</em>
+              </div>
+              <div className="preview-task-row">
+                <strong>Send onboarding docs</strong>
+                <em>High</em>
+              </div>
+              <div className="preview-task-row">
+                <strong>Follow up with Mira</strong>
+                <em>Low</em>
+              </div>
+              <div className="preview-task-row">
+                <strong>Prepare pitch deck</strong>
+                <em>Medium</em>
+              </div>
+            </div>
+
+            <div className="preview-kanban">
+              <article>
+                <span>Backlog</span>
+                <strong>Call about proposal</strong>
+                <p>Client: Bluestone</p>
+              </article>
+              <article>
+                <span>In progress</span>
+                <strong>Send onboarding docs</strong>
+                <p>Client: Tech Ltd.</p>
+              </article>
+              <article>
+                <span>Review</span>
+                <strong>Prepare pitch deck</strong>
+                <p>Client: Jabed Ali</p>
+              </article>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 export function LoginForm() {
   const { login } = useAuth();
-  const [mode, setMode] = useState<"login" | "signup" | "forgot" | "reset">("login");
+  const [mode, setMode] = useState<AuthMode>("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("admin@obliq.app");
   const [password, setPassword] = useState("Admin123!");
@@ -45,14 +159,20 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  const copy = MODE_COPY[mode];
+
+  function switchMode(nextMode: AuthMode) {
+    setMode(nextMode);
+    setError(null);
+    setInfo(null);
+  }
+
   async function safeJson<T>(response: Response): Promise<T> {
     const text = await response.text();
     try {
       return JSON.parse(text) as T;
     } catch {
-      throw new Error(
-        response.ok ? "Unexpected server response" : `Server error (${response.status})`,
-      );
+      throw new Error(response.ok ? "Unexpected server response" : `Server error (${response.status})`);
     }
   }
 
@@ -61,9 +181,10 @@ export function LoginForm() {
     setSubmitting(true);
     setError(null);
     setInfo(null);
+
     try {
       if (mode === "login") {
-        await login(email, password);
+        await login(email, password, remember);
       } else if (mode === "signup") {
         const response = await fetch(`${API_URL}/auth/signup`, {
           method: "POST",
@@ -87,11 +208,7 @@ export function LoginForm() {
           throw new Error(data.message ?? "Request failed");
         }
         setResetToken(data.resetToken ?? "");
-        setInfo(
-          data.resetToken
-            ? `Reset token generated: ${data.resetToken}`
-            : data.message ?? "If the account exists, a reset token has been generated.",
-        );
+        setInfo(data.resetToken ? `Reset token generated: ${data.resetToken}` : data.message ?? "Reset token generated.");
         setMode("reset");
       } else if (mode === "reset") {
         const response = await fetch(`${API_URL}/auth/reset-password`, {
@@ -122,7 +239,7 @@ export function LoginForm() {
 
   return (
     <div className="login-shell">
-      <div className="brand">
+      <div className="brand brand-floating">
         <div className="brand-mark" />
         <span>Obliq</span>
       </div>
@@ -130,23 +247,25 @@ export function LoginForm() {
       <div className="login-stage">
         <section className="login-card">
           <div className="auth-mode-switch">
-            <button className={mode === "login" ? "mode-chip active" : "mode-chip"} type="button" onClick={() => setMode("login")}>
+            <button className={mode === "login" ? "mode-chip active" : "mode-chip"} type="button" onClick={() => switchMode("login")}>
               Login
             </button>
-            <button className={mode === "signup" ? "mode-chip active" : "mode-chip"} type="button" onClick={() => setMode("signup")}>
+            <button className={mode === "signup" ? "mode-chip active" : "mode-chip"} type="button" onClick={() => switchMode("signup")}>
               Sign up
             </button>
-            <button className={mode === "forgot" || mode === "reset" ? "mode-chip active" : "mode-chip"} type="button" onClick={() => setMode("forgot")}>
-              Reset password
+            <button
+              className={mode === "forgot" || mode === "reset" ? "mode-chip active" : "mode-chip"}
+              type="button"
+              onClick={() => switchMode("forgot")}
+            >
+              Reset
             </button>
           </div>
-          <h1>Login</h1>
-          <p>
-            {mode === "login" && "Enter your details to continue"}
-            {mode === "signup" && "Create a customer account"}
-            {mode === "forgot" && "Generate a password reset token"}
-            {mode === "reset" && "Use the token to set a new password"}
-          </p>
+
+          <div className="login-copy">
+            <h1>{copy.title}</h1>
+            <p>{copy.subtitle}</p>
+          </div>
 
           <form onSubmit={handleSubmit} className="login-form">
             {mode === "signup" ? (
@@ -217,7 +336,7 @@ export function LoginForm() {
                   <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
                   <span>Remember me</span>
                 </label>
-                <button type="button" className="text-link" onClick={() => setMode("forgot")}>
+                <button type="button" className="text-link" onClick={() => switchMode("forgot")}>
                   Forgot password?
                 </button>
               </div>
@@ -227,33 +346,31 @@ export function LoginForm() {
             {info ? <div className="info-banner">{info}</div> : null}
 
             <button className="primary-button" type="submit" disabled={submitting}>
-              {submitting && mode === "login" ? "Signing in..." : null}
-              {submitting && mode === "signup" ? "Creating account..." : null}
-              {submitting && mode === "forgot" ? "Generating token..." : null}
-              {submitting && mode === "reset" ? "Resetting password..." : null}
-              {!submitting && mode === "login" ? "Log in" : null}
-              {!submitting && mode === "signup" ? "Sign up" : null}
-              {!submitting && mode === "forgot" ? "Generate reset token" : null}
-              {!submitting && mode === "reset" ? "Update password" : null}
+              {submitting ? "Working..." : copy.action}
             </button>
           </form>
 
           <div className="login-footer">
             {mode !== "signup" ? (
               <>
-                <span>Don’t have an account?</span>
-                <button type="button" className="footer-link" onClick={() => setMode("signup")}>
+                <span>Don&apos;t have an account?</span>
+                <button type="button" className="footer-link" onClick={() => switchMode("signup")}>
                   Sign up
                 </button>
               </>
             ) : (
               <>
                 <span>Already have an account?</span>
-                <button type="button" className="footer-link" onClick={() => setMode("login")}>
+                <button type="button" className="footer-link" onClick={() => switchMode("login")}>
                   Log in
                 </button>
               </>
             )}
+          </div>
+
+          <div className="demo-note">
+            <span className="eyebrow">Demo Access</span>
+            <p>Use one of the seeded accounts to inspect each RBAC level instantly.</p>
           </div>
 
           <div className="demo-users">
@@ -265,6 +382,7 @@ export function LoginForm() {
                 onClick={() => {
                   setEmail(demoUser.email);
                   setPassword(demoUser.password);
+                  switchMode("login");
                 }}
               >
                 {demoUser.label}
@@ -273,63 +391,7 @@ export function LoginForm() {
           </div>
         </section>
 
-        <aside className="preview-panel">
-          <div className="preview-waves" />
-          <div className="preview-window">
-            <div className="workspace-header">
-              <div className="workspace-avatar">W</div>
-              <div>
-                <strong>John’s workspace</strong>
-                <span>#WID12446875</span>
-              </div>
-            </div>
-
-            <nav className="preview-nav">
-              <span>Dashboard</span>
-              <span>Leads</span>
-              <span>Opportunities</span>
-              <span className="active">Tasks</span>
-              <span>Reports</span>
-              <span>Contacts</span>
-              <span>Messages</span>
-              <span>Configuration</span>
-              <span>Invoice</span>
-              <span>Settings</span>
-            </nav>
-
-            <div className="preview-content">
-              <div className="preview-list">
-                <div className="preview-toolbar">
-                  <span>Search table</span>
-                  <strong>List</strong>
-                  <span>Kanban</span>
-                  <span>Calendar</span>
-                </div>
-                <div className="preview-table">
-                  <div><span>Call about proposal</span><em>Urgent</em></div>
-                  <div><span>Send onboarding docs</span><em>High</em></div>
-                  <div><span>Follow up with Mira</span><em>Low</em></div>
-                  <div><span>Prepare pitch deck</span><em>Medium</em></div>
-                </div>
-              </div>
-
-              <div className="preview-kanban">
-                <article>
-                  <strong>Backlog</strong>
-                  <p>Call about proposal</p>
-                </article>
-                <article>
-                  <strong>In progress</strong>
-                  <p>Send onboarding docs</p>
-                </article>
-                <article>
-                  <strong>Review</strong>
-                  <p>Prepare pitch deck</p>
-                </article>
-              </div>
-            </div>
-          </div>
-        </aside>
+        <PreviewScene />
       </div>
     </div>
   );
