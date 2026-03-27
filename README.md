@@ -2,6 +2,13 @@
 
 This workspace contains a complete RBAC-oriented full-stack implementation based on the provided PDF brief and login-page Figma export.
 
+## Live Deployment
+
+- Frontend App: https://rbac-frontend-2dq3.onrender.com
+- Backend API: https://rbac-hy1v.onrender.com
+
+Note: the backend is a protected API service. Opening it directly in the browser can return `{"message":"Missing access token"}` unless you authenticate through the frontend app first.
+
 ## Structure
 
 - [frontend](/Users/tanzim_safin/Desktop/fullstack%20task/frontend): Next.js 14 app
@@ -24,7 +31,7 @@ This workspace contains a complete RBAC-oriented full-stack implementation based
 
 - frontend production build passes
 - backend TypeScript check passes
-- Neon PostgreSQL connectivity verified
+- Render PostgreSQL connectivity verified
 - seeded users confirmed in database
 
 ## Local Run
