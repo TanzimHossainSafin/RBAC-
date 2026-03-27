@@ -18,8 +18,21 @@ Create `.env.local` from `.env.example`:
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:4000
+API_SERVER_URL=http://localhost:4000
 JWT_SECRET=rbac-demo-secret
 ```
+
+## Render Deploy
+
+For Render, deploy the frontend as a web service with:
+
+```bash
+NEXT_PUBLIC_API_URL=/api/proxy
+API_SERVER_URL=https://your-backend-service.onrender.com
+JWT_SECRET=your-shared-jwt-secret
+```
+
+This keeps auth cookies on the frontend domain so middleware route protection continues to work in production.
 
 ## Run
 
